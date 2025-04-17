@@ -7,18 +7,25 @@ import {
   handleModelOptions,
   handleAppMention
 } from "./handlers";
+import { EsaClient } from 'esa-api-client';
 
 export default {
   async fetch(
     request: Request,
     env: SlackEdgeAppEnv & {
 			  GEMINI_API_KEY: string;
+				ESA_API_TOKEN: string;
+				ESA_TEAM_NAME: string;
 	},
     ctx: ExecutionContext
   ): Promise<Response> {
     // アプリとGeminiクライアントの初期化
     const app = new SlackApp({ env });
     const gemini = new GeminiClient({ apiKey: env.GEMINI_API_KEY });
+		const esa = new EsaClient({
+			token: env.ESA_API_TOKEN,
+			teamName: env.ESA_TEAM_NAME,
+		})
 
     // コマンドハンドラー
     app.command("/ask",
@@ -50,7 +57,7 @@ export default {
 	  );
     // メンションイベントハンドラー
     app.event("app_mention",
-      async (args) => await handleAppMention(args, gemini)
+      async (args) => await handleAppMention(args, gemini, esa)
     );
 
     // アプリを実行

@@ -1,4 +1,5 @@
 import { GeminiClient } from '../services';
+import { EsaClient } from 'esa-api-client';
 
 // 具体的な型が利用できないため、より汎用的な型を定義
 export type SlackCommandHandler = (
@@ -23,5 +24,6 @@ export type SlackOptionsHandler = (
 
 export type SlackEventHandler = (
 	args: { context: any; payload: any },
-	gemini: GeminiClient
+	gemini: GeminiClient,
+	esa: EsaClient
 ) => Promise<void>;
