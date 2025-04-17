@@ -1,5 +1,4 @@
 import { SlackEventHandler } from "../types";
-import { GeminiClient } from "../services/google";
 import { extractAskText } from "../utils/messageUtils";
 
 /**
@@ -10,7 +9,7 @@ export const handleAppMention: SlackEventHandler = async ({ context, payload }, 
   try {
     const text = payload.text || "";
     const askText = extractAskText(text);
-    
+
     if (askText && askText.length > 0) {
       const response = await gemini.generateContent(askText);
       await context.say({
