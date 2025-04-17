@@ -11,17 +11,17 @@ export interface GeminiRequestContent {
 
 export interface GeminiModel {
   name: string;
-  baseModelId: string;
-  version: string;
+  baseModelId?: string;
+  version?: string;
   displayName: string;
   description: string;
-  inputTokenLimit: number;
-  outputTokenLimit: number;
-  supportedGenerationMethods: string[];
-  temperature: number;
-  maxTemperature: number;
-  topP: number;
-  topK: number;
+  inputTokenLimit?: number;
+  outputTokenLimit?: number;
+  supportedGenerationMethods?: string[];
+  temperature?: number;
+  maxTemperature?: number;
+  topP?: number;
+  topK?: number;
 }
 
 interface GeminiResponseModel {
