@@ -17,7 +17,7 @@ interface SlackBody {
 	[key: string]: unknown;
 }
 
-interface SlackClient {
+export interface SlackClient {
 	chat: {
 		postMessage: (params: unknown) => Promise<unknown>;
 	};

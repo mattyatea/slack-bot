@@ -1,4 +1,5 @@
 import type { SlackEventHandler } from "../types";
+import type { SlackClient } from "../types";
 import {
 	extractAskText,
 	extractCommandType,
@@ -8,13 +9,12 @@ import {
 // 日付を整形する関数
 const formatDate = (dateStr: string) => {
 	const date = new Date(dateStr);
-	return date.toLocaleString("ja-JP", {
-		year: "numeric",
-		month: "2-digit",
-		day: "2-digit",
-		hour: "2-digit",
-		minute: "2-digit",
-	});
+	const year = date.getFullYear();
+	const month = String(date.getMonth() + 1).padStart(2, "0");
+	const day = String(date.getDate()).padStart(2, "0");
+	const hour = String(date.getHours()).padStart(2, "0");
+	const minute = String(date.getMinutes()).padStart(2, "0");
+	return `${year}/${month}/${day} ${hour}:${minute}`;
 };
 
 // タグをリンク付きで表示する関数
@@ -32,8 +32,10 @@ export const handleAppMention: SlackEventHandler = async (
 	gemini,
 	esa,
 ) => {
+	const client = (context as { client: SlackClient }).client;
+	const userId = (payload.user as string) || (payload.user_id as string) || "";
 	try {
-		const text = payload.text || "";
+		const text = (payload.text as string) || "";
 		const commendType = extractCommandType(text);
 
 		switch (commendType) {
@@ -41,13 +43,15 @@ export const handleAppMention: SlackEventHandler = async (
 				const askText = extractAskText(text);
 				if (askText && askText.length > 0) {
 					const response = await gemini.generateContent(askText);
-					await context.say({
-						text: `<@${context.userId}> \n ${response}`,
+					await client.chat.postMessage({
+						channel: userId,
+						text: `<@${userId}> \n ${response}`,
 					});
 				} else {
 					// 有効な質問テキストがなかった場合のフォールバックメッセージ
-					await context.say({
-						text: `<@${context.userId}> 質問を「ask」の後に続けて記述してください。例: @botname ask 天気について教えて`,
+					await client.chat.postMessage({
+						channel: userId,
+						text: `<@${userId}> 質問を「ask」の後に続けて記述してください。例: @botname ask 天気について教えて`,
 					});
 				}
 				break;
@@ -58,19 +62,24 @@ export const handleAppMention: SlackEventHandler = async (
 					const esaPosts = await esa.getPosts({
 						q: encodeURI(esaTitle.replace(" ", "+")),
 					});
-					await context.say({
+					await client.chat.postMessage({
+						channel: userId,
 						blocks: [
 							{
 								type: "section",
 								text: {
 									type: "mrkdwn",
-									text: `<@${context.userId}> \n\n${esaPosts.posts
+									text: `<@${userId}> \n\n${(esaPosts.posts as unknown[])
 										.map((post) => {
-											return `*<${post.url}|${post.name}>*
-:page_facing_up: ${post.category ? `*${post.category}*` : "カテゴリなし"}
-:label: ${formatTags(post.tags)}
-:bust_in_silhouette: ${post.created_by.screen_name} • :clock1: ${formatDate(post.created_at)}
-———————————————\n`;
+											const p = post as {
+												url: string;
+												name: string;
+												category?: string;
+												tags: string[];
+												created_by: { screen_name: string };
+												created_at: string;
+											};
+											return `*<${p.url}|${p.name}>*\n:page_facing_up: ${p.category ? `*${p.category}*` : "カテゴリなし"}\n:label: ${formatTags(p.tags)}\n:bust_in_silhouette: ${p.created_by.screen_name} • :clock1: ${formatDate(p.created_at)}\n———————————————\n`;
 										})
 										.join("")}`,
 								},
@@ -78,23 +87,26 @@ export const handleAppMention: SlackEventHandler = async (
 						],
 					});
 				} else {
-					await context.say({
-						text: `<@${context.userId}> 検索ワードを「esa」の後に続けて記述してください。例: @botname esa nodejs`,
+					await client.chat.postMessage({
+						channel: userId,
+						text: `<@${userId}> 検索ワードを「esa」の後に続けて記述してください。例: @botname esa nodejs`,
 					});
 				}
 				break;
 			}
 			default: {
-				await context.say({
-					text: `<@${context.userId}> コマンドが認識できませんでした。`,
+				await client.chat.postMessage({
+					channel: userId,
+					text: `<@${userId}> コマンドが認識できませんでした。`,
 				});
 				break;
 			}
 		}
 	} catch (error) {
 		console.error("App mention handler error:", error);
-		await context.say({
-			text: `<@${context.userId}> 申し訳ありません、エラーが発生しました。`,
+		await client.chat.postMessage({
+			channel: userId,
+			text: `<@${userId}> 申し訳ありません、エラーが発生しました。`,
 		});
 	}
 };
