@@ -1,68 +1,131 @@
-# Agents
+# Slack Bot Agents
 
-このドキュメントは、Slack Botプロジェクトのアーキテクチャとエージェントの概要を説明します。
+This document provides a detailed explanation of the internal architecture, key components (agents), and their interactions for the advanced Slack bot running on Cloudflare Workers.
 
-## プロジェクト概要
+## 1. Project Overview
 
-このプロジェクトは、Cloudflare Workers上で動作するSlackボットです。GoogleのGemini APIおよびesa.ioと連携し、Slack内で直接AIによる応答や情報検索を提供します。
+This bot aims to streamline communication and enhance knowledge utilization within a Slack workspace.
 
-## アーキテクチャ
+- **AI-Powered Conversations**: Integrates with Google's powerful generative AI model, "Gemini," to generate natural and accurate answers to user questions.
+- **Internal Knowledge Integration**: Connects with the internal knowledge base, "esa.io," enabling the AI to provide answers based on the content of internal documents.
+- **Intuitive UI**: Utilizes Slack features like modals and shortcuts to provide a seamless user interface for accessing AI functionalities.
 
-- **プラットフォーム**: Cloudflare Workers
-- **言語**: TypeScript
-- **フレームワーク**: `slack-cloudflare-workers`
-- **主要サービス**:
+## 2. System Architecture
+
+The system operates on the serverless platform Cloudflare Workers and integrates with external APIs to deliver its features.
+
+- **Execution Environment**: Cloudflare Workers
+- **Programming Language**: TypeScript
+- **Core Library**: `slack-cloudflare-workers`
+- **Integrated APIs**:
     - Slack API
     - Google Gemini API
     - esa.io API
 
-## Agents (主要コンポーネント)
+## 3. Setup
 
-ボットの機能は、特定のインタラクションやタスクを処理する役割を持つ、いくつかの「エージェント」に分かれています。
+To run the bot, you need to configure the following environment variables. Copy the `.vars.example` file in the project root to create a `.vars` file and set the respective values.
 
-### 1. Command Agent (コマンドエージェント)
+- `SLACK_SIGNING_SECRET`: The Signing Secret of your Slack App.
+- `SLACK_BOT_TOKEN`: The Bot User OAuth Token for your Slack App.
+- `GEMINI_API_KEY`: The API key issued from Google AI Studio.
+- `ESA_API_TOKEN`: A personal access token for esa.io.
+- `ESA_TEAM_NAME`: Your team name in esa.io.
 
-- **トリガー**: `/ask` スラッシュコマンド
-- **機能**: ユーザーの質問を受け取り、Gemini Agentに応答を依頼します。AIに直接質問するためのインターフェースです。
-- **実装**:
-    - `src/app/index.ts`: `app.command("/ask", ...)`
-    - `src/features/ai/handlers/command.ts`: `handleAskCommand`
+## 4. Agent Interaction Flow
 
-### 2. Shortcut Agent (ショートカットエージェント)
+Each agent collaborates to generate a response based on user actions. Here are the typical interaction flows.
 
-- **トリガー**: `ask-shortcut` グローバルショートカット
-- **機能**: AIへの質問をより構造化された方法で入力できるモーダル(`ai-modal`)を開きます。
-- **実装**:
-    - `src/app/index.ts`: `app.shortcut("ask-shortcut", ...)`
-    - `src/features/slack/handlers/shortcuts.ts`: `handleAskShortcut`
+**Flow 1: Question via `/ask` Command**
 
-### 3. Modal Agent (モーダルエージェント)
+```mermaid
+sequenceDiagram
+    participant User
+    participant Slack
+    participant CommandAgent as Command
+    participant GeminiAgent as Gemini
 
-- **トリガー**: `ai-modal` の送信
-- **機能**: AI質問モーダルから送信されたデータを処理します。ユーザーのクエリと選択されたAIモデルを受け取り、その情報をGemini Agentに渡して応答を生成させます。また、その応答をユーザーまたは指定されたチャンネルに投稿します。
-- **実装**:
-    - `src/app/index.ts`: `app.view("ai-modal", ...)`
-    - `src/features/ai/handlers/modal.ts`: `handleAiModalSubmission`
+    User->>Slack: /ask (Your question)
+    Slack->>CommandAgent: Execute command
+    CommandAgent->>GeminiAgent: Request response generation
+    GeminiAgent-->>CommandAgent: Generated response
+    CommandAgent->>Slack: Post response
+    Slack-->>User: Display message
+```
 
-### 4. Mention Agent (メンションエージェント)
+**Flow 2: Question via Mention (with esa.io Integration)**
 
-- **トリガー**: チャンネルでの `app_mention` イベント
-- **機能**: 最も複雑なエージェントです。ボットがメンションされると、メッセージの内容を処理します。Gemini Agentを使って文脈を理解し応答を生成するほか、Esa Agentと連携してesa.ioチーム内の情報を検索・取得することもできます。
-- **実装**:
-    - `src/app/index.ts`: `app.event("app_mention", ...)`
-    - `src/features/ai/handlers/mention.ts`: `handleAppMention`
+```mermaid
+sequenceDiagram
+    participant User
+    participant Slack
+    participant MentionAgent as Mention
+    participant EsaAgent as esa.io
+    participant GeminiAgent as Gemini
 
-### 5. Gemini Agent (サービス)
+    User->>Slack: @bot (Your question)
+    Slack->>MentionAgent: Mention event
+    MentionAgent->>EsaAgent: Search for relevant information
+    EsaAgent-->>MentionAgent: Search results (documents)
+    MentionAgent->>GeminiAgent: Request response generation with documents as context
+    GeminiAgent-->>MentionAgent: Generated response
+    MentionAgent->>Slack: Post response
+    Slack-->>User: Display message
+```
 
-- **トリガー**: 他のエージェント（Command, Modal, Mention）からの呼び出し
-- **機能**: Google Gemini APIのクライアントとして機能します。プロンプトを受け取ってAPIに送信し、生成されたテキストを返します。また、利用可能なAIモデルのリストも提供します。
-- **実装**:
-    - `src/features/ai/services/gemini.ts`: `GeminiClient`
+## 5. Agent Details
 
-### 6. Esa Agent (サービス)
+### 5.1. Command Agent
 
-- **トリガー**: Mention Agentからの呼び出し
-- **機能**: esa.io APIのクライアントとして機能します。esa.ioチームから記事などの情報を取得するために使用され、その情報をGemini Agentのコンテキストとして利用できます。
-- **実装**:
-    - `src/app/index.ts`: `const esa = new EsaClient(...)`
-    - `esa-api-client` ライブラリ
+- **Responsibility**: Processes the `/ask` command to provide quick answers from the AI.
+- **Trigger**: A user executes the `/ask` command.
+- **Process**:
+    1. Retrieves the question text from the command.
+    2. Passes the text to the `Gemini Agent` to request a response.
+    3. Posts the response received from the `Gemini Agent` to the channel where the command was executed.
+- **Related Code**: `src/features/ai/handlers/command.ts`
+
+### 5.2. Shortcut Agent
+
+- **Responsibility**: Provides a modal window for asking the AI with more detailed settings.
+- **Trigger**: A user executes the `ask-shortcut`.
+- **Process**:
+    1. Opens a modal for inputting the question, selecting the AI model, and specifying the destination for the result.
+- **Related Code**: `src/features/slack/handlers/shortcuts.ts`
+
+### 5.3. Modal Agent
+
+- **Responsibility**: Handles data submission from the modal opened by the `Shortcut Agent`.
+- **Trigger**: A user clicks the "Submit" button in the modal.
+- **Process**:
+    1. Retrieves settings such as "Question," "AI Model," etc., from the modal.
+    2. Passes this information to the `Gemini Agent` to request a response.
+    3. Sends the generated response as a message to the destination specified in the modal.
+- **Related Code**: `src/features/ai/handlers/modal.ts`
+
+### 5.4. Mention Agent
+
+- **Responsibility**: Detects mentions of the bot and provides context-aware responses. It handles the most advanced logic, including the integration with esa.io.
+- **Trigger**: The bot is mentioned (`@bot`).
+- **Process**:
+    1. Retrieves the text and context (e.g., thread) of the mention.
+    2. Calls the `Esa Agent` to search for relevant internal knowledge.
+    3. Passes the retrieved knowledge as supplementary information to the `Gemini Agent` to request a more accurate response.
+    4. Replies with the generated response in the thread of the original mention.
+- **Related Code**: `src/features/ai/handlers/mention.ts`
+
+### 5.5. Gemini Agent (Service)
+
+- **Responsibility**: Abstracts the communication with the Google Gemini API, providing a consistent interface.
+- **Role**: A service that calls the Gemini API based on prompts from other agents and returns the result.
+- **Functions**:
+    - Text generation
+    - Providing a list of available models
+- **Related Code**: `src/features/ai/services/gemini.ts`
+
+### 5.6. Esa Agent (Service)
+
+- **Responsibility**: Abstracts the communication with the esa.io API.
+- **Role**: Calls the esa.io API to search for and retrieve documents based on requests from the `Mention Agent`.
+- **Library Used**: `esa-api-client`
+- **Related Code**: `src/app/index.ts` (for client initialization)
