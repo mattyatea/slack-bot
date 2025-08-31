@@ -1,4 +1,4 @@
 export { handleAskCommand, handleAiModalSubmission } from "./ai";
-export { handleEsaSearch } from "./esa";
+export { handleEsaSearch, handleEsaCreateMention } from "./esa";
 export { handleAskShortcut, handleModelOptions } from "./modal";
 export { handleAppMention } from "./mention";
