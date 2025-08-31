@@ -1,52 +1,45 @@
 import type { EsaClient } from "esa-api-client";
-import type { GeminiClient } from "../services";
+import type {
+	SlackRequestWithRespond,
+	SlashCommand,
+	SlackRequest,
+	BlockSuggestion,
+	SlackRequestWithOptionalRespond,
+	ViewSubmission,
+	SlackRequestWithChannelId,
+	AppMentionEvent,
+	GlobalShortcut,
+	SlackOptionsResponse,
+	SlackAPIClient,
+} from "slack-cloudflare-workers";
+import type { GeminiClient } from "../features/ai/services/gemini";
+import type { AppEnv } from "../config/env";
 
-// Slackイベント関連の型定義
-interface SlackContext {
-	botId?: string;
-	botToken?: string;
-	teamId?: string;
-	enterpriseId?: string | null;
-}
-
-interface SlackPayload {
-	[key: string]: unknown;
-}
-
-interface SlackBody {
-	[key: string]: unknown;
-}
-
-interface SlackClient {
-	chat: {
-		postMessage: (params: unknown) => Promise<unknown>;
-	};
-	[key: string]: unknown;
-}
-
-// 具体的な型を定義
+// ハンドラーの型定義
 export type SlackCommandHandler = (
-	args: { context: SlackContext; payload: SlackPayload },
+	args: SlackRequestWithRespond<AppEnv, SlashCommand>,
 	gemini: GeminiClient,
-) => Promise<unknown>;
+) => Promise<void>;
 
 export type SlackShortcutHandler = (
-	args: { context: SlackContext; body: SlackBody },
+	args: SlackRequest<AppEnv, GlobalShortcut>,
 	gemini?: GeminiClient,
 ) => Promise<void>;
 
 export type SlackViewHandler = (
-	args: { payload: SlackPayload; client: SlackClient },
+	args: SlackRequestWithOptionalRespond<AppEnv, ViewSubmission> & {
+		client: SlackAPIClient;
+	},
 	gemini: GeminiClient,
-) => Promise<unknown>;
+) => Promise<void | { response_action: string; errors?: Record<string, string> }>;
 
 export type SlackOptionsHandler = (
-	args: { payload: SlackPayload },
+	args: SlackRequest<AppEnv, BlockSuggestion>,
 	gemini: GeminiClient,
-) => Promise<unknown>;
+) => Promise<SlackOptionsResponse>;
 
 export type SlackEventHandler = (
-	args: { context: SlackContext; payload: SlackPayload },
+	args: SlackRequestWithChannelId<AppEnv, AppMentionEvent>,
 	gemini: GeminiClient,
 	esa: EsaClient,
 ) => Promise<void>;
