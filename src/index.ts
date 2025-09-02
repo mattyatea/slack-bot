@@ -16,75 +16,78 @@ import {
 import { GeminiClient } from "./services";
 import type { AppEnv } from "./types";
 
+class SlackBot {
+	private readonly app: SlackApp<AppEnv>;
+	private readonly gemini: GeminiClient;
+	private readonly esa: EsaClient;
+
+	constructor(env: AppEnv) {
+		this.app = new SlackApp({ env });
+		this.gemini = new GeminiClient({ apiKey: env.GEMINI_API_KEY });
+		this.esa = new EsaClient({
+			token: env.ESA_API_TOKEN,
+			teamName: env.ESA_TEAM_NAME,
+		});
+		this.registerHandlers();
+	}
+
+	private registerHandlers(): void {
+		// /askコマンド
+		this.app.command(
+			"/ask",
+			async () => {},
+			async (args) => {
+				await handleAskCommand(args, this.gemini);
+			},
+		);
+
+		// ショートカット
+		this.app.shortcut(
+			"ask-shortcut",
+			async () => {},
+			async (args) => {
+				await handleAskShortcut(args);
+			},
+		);
+
+		// モデル選択
+		this.app.options("models", async (args) => {
+			return await handleModelOptions(args, this.gemini);
+		});
+
+		// モーダル送信
+		this.app.view(
+			"ai-modal",
+			async () => {},
+			(args) => handleAiModalSubmission(args, this.gemini),
+		);
+
+		// メンション
+		this.app.event("app_mention", async (args) => {
+			await handleAppMention(args, this.gemini, this.esa);
+		});
+	}
+
+	async fetch(
+		request: Request,
+		env: AppEnv,
+		ctx: ExecutionContext,
+	): Promise<Response> {
+		return this.app.run(request, ctx);
+	}
+}
+
+let bot: SlackBot;
+
 export default {
 	async fetch(
 		request: Request,
 		env: AppEnv,
 		ctx: ExecutionContext,
 	): Promise<Response> {
-		const app = new SlackApp({ env });
-		const gemini = new GeminiClient({ apiKey: env.GEMINI_API_KEY });
-		const esa = new EsaClient({
-			token: env.ESA_API_TOKEN,
-			teamName: env.ESA_TEAM_NAME,
-		});
-
-		// /askコマンド
-		app.command(
-			"/ask",
-			async () => {},
-			async (args) => {
-				await handleAskCommand(args, gemini);
-			},
-		);
-
-		// ショートカット
-		app.shortcut(
-			"ask-shortcut",
-			async () => {},
-			async (args) => {
-				// GlobalShortcutのみを処理
-				if ("type" in args.payload && args.payload.type === "shortcut") {
-					await handleAskShortcut(args as SlackRequest<AppEnv, GlobalShortcut>);
-				}
-			},
-		);
-
-		// モデル選択
-		app.options("models", async (args) => {
-			return await handleModelOptions(args, gemini);
-		});
-
-		// モーダル送信
-		app.view(
-			"ai-modal",
-			async () => {},
-			async (args) => {
-				// ViewSubmissionのみを処理
-				if ("view" in args.payload && "trigger_id" in args.payload) {
-					const viewArgs = args as SlackRequestWithOptionalRespond<
-						AppEnv,
-						ViewSubmission
-					>;
-					const enhancedArgs = {
-						...viewArgs,
-						client: viewArgs.context.client,
-					};
-					const result = await handleAiModalSubmission(enhancedArgs, gemini);
-					if (result) {
-						// エラーレスポンスを型キャストして返す
-						// biome-ignore lint/suspicious/noConfusingVoidType: <explanation>
-						return result as unknown as void;
-					}
-				}
-			},
-		);
-
-		// メンション
-		app.event("app_mention", async (args) => {
-			await handleAppMention(args, gemini, esa);
-		});
-
-		return await app.run(request, ctx);
+		if (!bot) {
+			bot = new SlackBot(env);
+		}
+		return bot.fetch(request, env, ctx);
 	},
 };

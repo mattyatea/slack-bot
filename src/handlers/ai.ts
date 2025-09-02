@@ -45,20 +45,19 @@ export async function handleAskCommand<
 export async function handleAiModalSubmission<
 	E extends import("slack-cloudflare-workers").SlackAppEnv,
 >(
-	args: SlackRequestWithOptionalRespond<E, ViewSubmission> & {
-		client: import("slack-cloudflare-workers").SlackAPIClient;
-	},
+	args: SlackRequestWithOptionalRespond<E, ViewSubmission>,
 	gemini: GeminiClient,
-	// biome-ignore lint/suspicious/noConfusingVoidType: <explanation>
 ): Promise<{ response_action: string; errors: Record<string, string> } | void> {
+	// ViewSubmissionのみを処理
+	if (!("view" in args.payload && "trigger_id" in args.payload)) {
+		return;
+	}
+
 	const askContent = args.payload.view.state.values.context.input.value ?? "";
 	if (askContent.length < 1) {
 		return {
 			response_action: "errors",
-			errors: { context: "内容は1文字以上で記述してください" } as Record<
-				string,
-				string
-			>,
+			errors: { context: "内容は1文字以上で記述してください" },
 		};
 	}
 
@@ -67,7 +66,7 @@ export async function handleAiModalSubmission<
 	if (!model) {
 		return {
 			response_action: "errors",
-			errors: { model: "モデルを選択してください" } as Record<string, string>,
+			errors: { model: "モデルを選択してください" },
 		};
 	}
 
@@ -75,7 +74,7 @@ export async function handleAiModalSubmission<
 		if (!(await gemini.isExistModel(model))) {
 			return {
 				response_action: "errors",
-				errors: { model: "そのモデルは存在しません" } as Record<string, string>,
+				errors: { model: "そのモデルは存在しません" },
 			};
 		}
 
@@ -83,14 +82,11 @@ export async function handleAiModalSubmission<
 		if (!response) {
 			return {
 				response_action: "errors",
-				errors: { context: "AIからの応答がありませんでした" } as Record<
-					string,
-					string
-				>,
+				errors: { context: "AIからの応答がありませんでした" },
 			};
 		}
 
-		await args.client.chat.postMessage({
+		await args.context.client.chat.postMessage({
 			channel: args.payload.user.id,
 			text: response,
 			blocks: [
@@ -110,7 +106,7 @@ export async function handleAiModalSubmission<
 			errors: {
 				context:
 					"エラーが発生しました。しばらくしてからもう一度お試しください。",
-			} as Record<string, string>,
+			},
 		};
 	}
 }

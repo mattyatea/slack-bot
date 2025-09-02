@@ -1,17 +1,22 @@
 import type {
-	SlackRequest,
 	GlobalShortcut,
 	BlockSuggestion,
 	SlackOptionsResponse,
+	SlackRequest,
+	MessageShortcut,
 } from "slack-cloudflare-workers";
 import type { GeminiClient } from "../services";
 
 /**
  * ショートカットでモーダルを開く
  */
-export async function handleAskShortcut<E extends import("slack-cloudflare-workers").SlackAppEnv>(
-	args: SlackRequest<E, GlobalShortcut>,
-) {
+export async function handleAskShortcut<
+	E extends import("slack-cloudflare-workers").SlackAppEnv,
+>(args: SlackRequest<E, GlobalShortcut | MessageShortcut>) {
+	// GlobalShortcutのみを処理
+	if (args.payload.type !== "shortcut") {
+		return;
+	}
 	try {
 		await args.context.client.views.open({
 			trigger_id: args.body.trigger_id,
